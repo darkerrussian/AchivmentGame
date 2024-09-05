@@ -15,14 +15,6 @@ import (
 	"time"
 )
 
-//ОСТАЛОСЬ СДЕЛАТЬ
-
-/*
-Переделать чемпионов, сделать колличество убийств, сделать bool переменная killable
-по дефолту false, если герой побеждает и не умирает то чекается кол-во убийств и проверяется killable
-если killable false а сейчас уже 3 убийства, то присваивается Tripple Kill. Если его убили, то присваивается
-killable = true, а при следующем бою, если боец победил и killable = true, то оно меняется на false.
-*/
 func main() {
 	db, err := Database.InitDB()
 	http.HandleFunc("/", Server.Handle)

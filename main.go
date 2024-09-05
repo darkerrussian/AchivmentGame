@@ -5,80 +5,85 @@ import (
 	"AchivmentGame/Models"
 	"AchivmentGame/Server"
 	"fmt"
+	"github.com/gorilla/mux"
+	"gorm.io/gorm"
+	"log"
 	"math/rand"
 	"net/http"
+	"net/url"
+	"strconv"
 	"time"
 )
 
+//ОСТАЛОСЬ СДЕЛАТЬ
+
+/*
+Переделать чемпионов, сделать колличество убийств, сделать bool переменная killable
+по дефолту false, если герой побеждает и не умирает то чекается кол-во убийств и проверяется killable
+если killable false а сейчас уже 3 убийства, то присваивается Tripple Kill. Если его убили, то присваивается
+killable = true, а при следующем бою, если боец победил и killable = true, то оно меняется на false.
+*/
 func main() {
 	db, err := Database.InitDB()
 	http.HandleFunc("/", Server.Handle)
-	//http.ListenAndServe(":8081", nil)
+
+	r := mux.NewRouter()
+	Server.RegisterRoutes(r)
+
 	if err != nil {
 		panic(err)
 	}
 
 	db.AutoMigrate(&Models.Champion{})
 	db.AutoMigrate(&Models.Item{})
-	//item :=Models.Item{Name: "Axe", Damage: 7}
-	//db.Create(&item)
-	var item Models.Item
-	db.First(&item, 2) //Axe
-	var championI Models.Champion
-	db.First(&championI, 7) //invoker
-	championI.Item = item
-	var championP Models.Champion
-	db.First(&championP, 2) //Pudge
-	championP.Item = item
-	//fmt.Println(item.Name, item.Damage)
 
-	/*championC := Models.Champion{Damage: 7, Name: "Pudge", HP: 26, Agility: 3, Item : item}
-	db.Create(&championC)*/
+	var championI []Models.Champion
 
-	var items []Models.Item
+	//Test adding champion
+	/*championT := Models.Champion{ Damage: 12, Name: "Human", HP: 10, Agility: 7}
+	db.Create(&championT)*/
 
-	/*	db.Find(&items)
-		db.Find(&heroes)*/
-	heroes := make([]Models.Champion, 0)
-	fmt.Println(heroes, " and ", items)
+	db.Order("RANDOM()").Limit(2).Find(&championI)
+	for _, champion := range championI {
 
-	heroes = append(heroes, championP, championI)
-	PrepareToFight(heroes)
-	fmt.Println("Agility ", heroes[0].GetAgility())
-	Fight(heroes)
+		fmt.Println("FOR ORDER", champion.GetName())
+
+	}
+
+	winner := Fight(championI)
+
+	//add Kill stat to CHAMPION
+	initWinner(db, &winner)
+
 }
 
-/*func main() {
-
-	fmt.Println("Status .. Running...")
-
-	axe := Models.Axe{Damage: 10}
-	heroes := make([]Models.Hero, 0)
-	pudge := Models.Pudge{
-		Stats: Models.Stats{Damage: 6, Agility: 1, HP: 21}, Weapon: Models.Weapon(&axe),
+func postWinner(winner *Models.Champion) {
+	var data = url.Values{}
+	data.Add("name", winner.Name)
+	data.Add("kills", strconv.Itoa(winner.GetKills()))
+	data.Add("killable", strconv.FormatBool(winner.Killable))
+	resp, err := http.PostForm("http://localhost:8090/winner", data)
+	if err != nil {
+		log.Fatalf("Failed to send winner: %v", err)
 	}
-	invoker := Models.Invoker{
-		Stats: Models.Stats{Damage: 7, Agility: 6, HP: 27}, Weapon: Models.Weapon(&axe),
+	defer resp.Body.Close()
+
+	if resp.StatusCode == http.StatusOK {
+		log.Println("Winner successfully sent")
+	} else {
+		log.Printf("Failed to send winner, status code: %d", resp.StatusCode)
+	}
+}
+
+func initWinner(db *gorm.DB, winner *Models.Champion) {
+	defer postWinner(winner)
+
+	if winner.Killable == true {
+		winner.Killable = false
 	}
 
-
-	heroes = append(heroes, &pudge, &invoker)
-
-	PrepareToFight(heroes)
-	Fight(heroes)
-
-}*/
-
-func PrepareToFight(heroes []Models.Champion) {
-
-	for _, h := range heroes {
-		//h.SetDamage(h.GetWeapon().GetDamage())
-		if h.GetItem().GetName() == "Axe" {
-			h.GetItem().GetUnique(&h)
-		}
-		//Not checking HP btw
-
-	}
+	db.Model(winner).Update("kills", winner.AddKill())
+	db.Model(winner).Update("killable", winner.Killable)
 
 }
 
@@ -89,34 +94,38 @@ func init() {
 func Fight(heroes []Models.Champion) Models.Champion {
 
 	fmt.Println("Fight begin ...")
+
 	fmt.Println(heroes[0].GetName(), " VS ", heroes[1].GetName())
+
 	var ChanseToMiss int
 
 	for {
 		ChanseToMiss = rand.Intn(10)
 
-		time.Sleep(time.Second * 3)
+		time.Sleep(time.Second * 1)
 		if heroes[0].GetHP() <= 0 {
 			fmt.Println("Winner is ", heroes[1].GetName())
+
 			return heroes[1]
 
 		} else if heroes[1].GetHP() <= 0 {
 			fmt.Println("Winner is ", heroes[0].GetName())
-			return heroes[1]
+
+			return heroes[0]
 
 		}
 
 		if heroes[1].GetAgility() < ChanseToMiss {
 
-			heroes[1].SetHP(-(heroes[0].GetDamage() + heroes[0].GetItem().GetDamage()))
+			heroes[1].SetHP(-heroes[0].GetDamage())
 
-			fmt.Println(heroes[0].GetName(), " Attacked ", heroes[1].GetName(), " with ", heroes[0].GetDamage()+heroes[0].GetItem().GetDamage(), " damage")
+			fmt.Println(heroes[0].GetName(), " Attacked ", heroes[1].GetName(), " with ", heroes[0].GetDamage(), " damage")
 
 			fmt.Println(heroes[1].GetName(), " now have ", heroes[1].GetHP(), " HP")
 			time.Sleep(time.Second)
 			if heroes[1].GetHP() <= 0 {
 				fmt.Println("Winner is ", heroes[0].GetName())
-				return heroes[1]
+				return heroes[0]
 
 			}
 
@@ -126,9 +135,9 @@ func Fight(heroes []Models.Champion) Models.Champion {
 		ChanseToMiss = rand.Intn(10)
 
 		if heroes[0].GetAgility() < ChanseToMiss {
-			heroes[0].SetHP(-heroes[1].GetDamage() - heroes[1].GetItem().GetDamage())
+			heroes[0].SetHP(-heroes[1].GetDamage())
 
-			fmt.Println(heroes[1].GetName(), " Attacked ", heroes[0].GetName(), " with ", heroes[1].GetDamage()+heroes[1].GetItem().GetDamage(), " damage")
+			fmt.Println(heroes[1].GetName(), " Attacked ", heroes[0].GetName(), " with ", heroes[1].GetDamage(), " damage")
 
 			fmt.Println(heroes[0].GetName(), " now have ", heroes[0].GetHP(), " HP")
 

@@ -4,14 +4,21 @@ import "gorm.io/gorm"
 
 type Champion struct {
 	gorm.Model
-	Name    string
-	HP      int
-	Damage  int
-	Agility int
-
-	Item
+	Name     string
+	HP       int
+	Damage   int
+	Agility  int
+	Killable bool
+	Kills    int
 }
 
+func (ch Champion) GetKills() int {
+	return ch.Kills
+}
+
+func (ch *Champion) AddKill() int {
+	return ch.Kills + 1
+}
 func (ch Champion) GetName() string {
 	return ch.Name
 }
@@ -35,11 +42,4 @@ func (ch Champion) GetAgility() int {
 }
 func (ch *Champion) AddAgility(boostAgility int) {
 	ch.Agility += boostAgility
-}
-func (ch Champion) GetItem() Item {
-	return ch.Item
-}
-
-func (ch *Champion) SetItem(w Item) {
-	ch.Item = w
 }

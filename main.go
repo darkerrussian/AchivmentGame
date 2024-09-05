@@ -35,7 +35,6 @@ func main() {
 	}
 
 	db.AutoMigrate(&Models.Champion{})
-	db.AutoMigrate(&Models.Item{})
 
 	var championI []Models.Champion
 
